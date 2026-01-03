@@ -1,0 +1,10 @@
+wg:
+  iface: wg0
+  listen_port: 0
+  private_key: "REPLACE_WITH_CLIENT_PRIVATE_KEY"
+  address: "10.10.0.2/32"
+  server_endpoint: "SERVER_PUBLIC_IP:51820"
+  server_public_key: "REPLACE_WITH_SERVER_PUBLIC_KEY"
+  allowed_ips:
+    - "10.10.0.0/24"
+  persistent_keepalive_sec: 25

@@ -1,0 +1,15 @@
+wg:
+  iface: wg0
+  listen_port: 51820
+  private_key: "REPLACE_WITH_SERVER_PRIVATE_KEY"
+  address: "10.10.0.1/24"
+  peers:
+    - public_key: "REPLACE_WITH_CLIENT_PUBLIC_KEY"
+      allowed_ips:
+        - "10.10.0.2/32"
+
+authz:
+  mode: observe
+
+logging:
+  enabled: true

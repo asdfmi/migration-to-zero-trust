@@ -1,187 +1,53 @@
-# Zero Trust Data Plane Implementation Design (WireGuard-based)
+# MVP Data Plane Design (WireGuard)
 
-## 1. Purpose and Scope
-- Define the minimal data plane specification for a WireGuard-based MVP
-- Configuration distribution (control plane) is out of scope; assume local configuration files
-- This design focuses on the MVP minimal implementation of the data plane and does not cover the whole Zero Trust picture
-- Existing architecture, migration strategy, and operational policy are out of scope
+### Topology
+This implementation consists of three binaries: wg-client on the source host, wg-server as a gateway inside the target network, and protected-resource as a minimal HTTP service. Both wg-client and wg-server are configured from local YAML files. wg-client brings up a WireGuard interface and installs routes for AllowedIPs. wg-server brings up its WireGuard interface, configures peers, and optionally enables logging and L3 allowlist enforcement via nftables/NFLOG. Logging emits JSONL locally. The protected-resource is only for connectivity validation.
+ 
+### wg-server ([README](../wg-server/README.md))
+- Creates or reuses a WireGuard interface, assigns address, listen port, and peers from config.
+- authz_mode:
+  - observe: always forward, optionally log.
+  - enforce: apply L3 allowlist rules (default drop) via nftables.
+- logging_enabled:
+  - Adds an nftables NFLOG rule on the forward path.
+  - Writes JSONL events locally (src/dst IP, ports, proto, client_id).
+- Policy mapping:
+  - client_id is the peer public key.
+- Config file: `wg-server/configs/config.example.yaml`
 
-## 2. Runtimes to Implement
-- WireGuard client (embedded in Client)
-- WG server
+### wg-client ([README](../wg-client/README.md))
+- Creates or reuses a WireGuard interface, assigns address, configures the server peer.
+- Adds OS routes for AllowedIPs.
+- Supports optional listen port and persistent keepalive.
+- Config file: `wg-client/configs/config.example.yaml`
 
-## 3. Terminology
-- client ID: Identifier derived from the WireGuard public key
-- inner packet: The inner packet decrypted by WireGuard
-
-## 4. Configuration (MVP)
-- Configuration is loaded from local files at runtime
-- For client
-  - WG server endpoint (IP:Port)
-  - WG server public key
-  - AllowedIPs (logical CIDR)
-- For WG server
-  - client ID
-  - client public key
-  - AllowedIPs (logical CIDR)
-  - (Optional) policy definition (L3/IPv4 allowlist only)
-
-## 5. Client / WireGuard
-### Client
-- Embeds a WireGuard client
-- The WG private key for the client is generated and held on the client side; it is never stored or distributed
-- Configured with:
-  - WG server endpoint (IP:Port)
-  - WG server public key
-  - AllowedIPs (logical CIDR)
-- OS routing sends traffic destined for AllowedIPs to the wg interface
-
-### WireGuard
-- Has only the following roles:
-  - Cryptographic verification
-  - Peer identification (public key)
-  - Inner packet generation
-- Has no concepts of authorization, policy, or logging
-
-## 6. WG Server (Implementation Target)
-### Inputs
-- Inner packet after WG decryption
-- Corresponding client ID (derived from the public key)
-
-### Outputs
-- Packet forwarding to the next hop
-
-### Required Functions
-- authz_mode flag
-  - observe: do not perform authorization; always forward
-  - enforce: allow/deny based on L3/IPv4 allowlist policy
-- logging_enabled flag
-  - on/off (independent of authz_mode)
-- authz_mode and logging_enabled are managed as local WG server settings
-
-### Behavior (observe)
-1. Receive packet
-2. Obtain client ID
-3. Do not perform authorization
-4. Forward to next hop
-5. Generate event only if logging_enabled is true
-
-## 7. Logging (Optional)
-### Implementation Constraints
-- Datapath may emit logs directly in the MVP
-### Destination (MVP)
-- Logging output is local only (e.g., file/stdout); no centralized collection
-
-### Implementation
-- Simple local writer
-
-### Flush Conditions
-- Periodic flush by the local writer
-
-## 8. Invariants
-- WireGuard cryptographic verification is always performed
-- "Ignoring verification and passing through" means not using the verification result for authz
-- This is a gateway responsibility, not a WireGuard responsibility
-
-## 9. State Switching
-- authz_mode: observe <-> enforce
-- logging_enabled: off <-> on
-- Both can be switched independently
-
-## 10. One-line Definition for Implementers
-"WG confirms the ID. The WG server can choose to use it or discard it. It attaches no other meaning."
+### protected-resource ([README](../protected-resource/README.md))
+- Minimal HTTP server used as a protected resource.
+- Listens on 0.0.0.0:8080; /healthz returns 200.
 
 ---
 
-# Zero Trust Data Plane 実装設計（WireGuard ベース）
+### 全体構成
+本実装は 3 つのバイナリで構成される。接続元の wg-client、ゲートウェイとして動く wg-server、疎通確認用の最小 HTTP サービス protected-resource。wg-client と wg-server はどちらもローカル YAML 設定から起動する。wg-client は WireGuard インターフェースを作成し AllowedIPs のルートを追加する。wg-server は WireGuard インターフェースと peer を設定し、必要に応じて nftables/NFLOG によるローカル JSONL ログと L3 allowlist の enforce を有効化する。protected-resource は到達性の確認用に限る。
+ 
+### wg-server（[README](../wg-server/README.md)）
+- WireGuard インターフェースを作成/再利用し、アドレス、待受ポート、peer を設定。
+- authz_mode:
+  - observe: 常に forward、必要ならログのみ。
+  - enforce: L3 allowlist を nftables で適用（デフォルト drop）。
+- logging_enabled:
+  - forward 経路に nftables の NFLOG ルールを追加。
+  - JSONL でローカル出力（src/dst IP, port, proto, client_id）。
+- Policy:
+  - client_id は peer の公開鍵。
+- 設定ファイル: `wg-server/configs/config.example.yaml`
 
-## 1. 目的と範囲
-- WireGuard ベースの MVP における data plane の最小仕様を定義する
-- 設定配布（Control Plane）は対象外とし、ローカル設定ファイルを前提とする
-- 本設計は MVP としての data plane 最小実装に絞り、Zero Trust 全体像は扱わない
-- 既存アーキテクチャ、移行戦略、運用方針は扱わない
+### wg-client（[README](../wg-client/README.md)）
+- WireGuard インターフェースを作成/再利用し、アドレスと server peer を設定。
+- AllowedIPs へのルートを追加。
+- listen_port と persistent keepalive を任意で設定可。
+- 設定ファイル: `wg-client/configs/config.example.yaml`
 
-## 2. 実装する runtime
-- WireGuard client（Client 内包）
-- WG server
-
-## 3. 用語
-- client ID: WireGuard 公開鍵に由来する識別子
-- inner packet: WireGuard で復号された内側のパケット
-
-## 4. 設定（MVP）
-- 設定はローカルのファイルから読み込む
-- client 向け
-  - WG server endpoint（IP:Port）
-  - WG server 公開鍵
-  - AllowedIPs（論理 CIDR）
-- WG server 向け
-  - client ID
-  - client 公開鍵
-  - AllowedIPs（論理 CIDR）
-  - （任意）policy 定義（L3/IPv4 の allowlist のみ）
-
-## 5. Client / WireGuard
-### Client
-- WireGuard client を内包する
-- client 用 WG 秘密鍵は client 側で生成・保持し、外部へ配布しない
-- 以下を設定する:
-  - WG server endpoint（IP:Port）
-  - WG server 公開鍵
-  - AllowedIPs（論理 CIDR）
-- OS routing により、AllowedIPs 宛の通信を wg interface に送出する
-
-### WireGuard
-- 役割は以下のみ:
-  - 暗号検証
-  - peer 識別（公開鍵）
-  - inner packet 生成
-- 認可・policy・logging の概念を持たない
-
-## 6. WG server（実装対象）
-### 入力
-- WG 通過後の inner packet
-- 対応する client ID（公開鍵由来）
-
-### 出力
-- 次ホップへの packet forward
-
-### 必須機能
-- authz_mode フラグ
-  - observe: 認可判断を行わず必ず forward
-  - enforce: L3/IPv4 の allowlist policy に基づき allow/deny
-- logging_enabled フラグ
-  - on/off（authz_mode とは独立）
-- authz_mode と logging_enabled は WG server のローカル設定で管理する
-
-### 動作仕様（observe）
-1. packet 受信
-2. client ID を取得
-3. 認可判断を行わない
-4. 次ホップへ forward
-5. logging_enabled の場合のみ event 生成
-
-## 7. Logging（オプション機能）
-### 実装制約
-- datapath から直接ログ出力してよい（MVP）
-### 出力先（MVP）
-- ログ出力はローカルのみ（例: file/stdout）とし、集約は行わない
-
-### 実装
-- ローカルへのシンプルな書き込み
-
-### flush 条件
-- ローカル書き込みの定期フラッシュ
-
-## 8. 不変条件
-- WireGuard の暗号検証は常に実行される
-- 「検証を無視して通す」とは、検証結果を authz に使わないことを意味する
-- これは gateway の責務であり WireGuard の責務ではない
-
-## 9. 状態切替
-- authz_mode: observe ↔ enforce
-- logging_enabled: off ↔ on
-- 両者は独立して切替可能
-
-## 10. 実装者向け一文定義
-「WG は ID を確定する。WG server はそれを使うか捨てるかを選べる。それ以外の意味づけはしない。」
+### protected-resource（[README](../protected-resource/README.md)）
+- 保護対象として使う最小 HTTP サーバ。
+- 0.0.0.0:8080 で待受、/healthz は 200。

@@ -15,6 +15,7 @@ gcloud compute scp --zone <ZONE> ./wg-server ./wg-server/configs/config.example.
 ### Run
 ```bash
 gcloud compute ssh --zone <ZONE> <INSTANCE_NAME>
+sudo sysctl -w net.ipv4.ip_forward=1
 sudo ~/wg-server --config ~/config.yaml
 ```
 

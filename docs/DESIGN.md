@@ -68,22 +68,15 @@
 
 ## 7. Logging (Optional)
 ### Implementation Constraints
-- Datapath only enqueues
-- I/O and synchronous processing are prohibited
+- Datapath may emit logs directly in the MVP
 ### Destination (MVP)
 - Logging output is local only (e.g., file/stdout); no centralized collection
 
 ### Implementation
-- Lock-free ring buffer
-- Resident daemon dequeues asynchronously
+- Simple local writer
 
 ### Flush Conditions
-- Buffer usage OR elapsed time
-
-### Push
-- Asynchronous batch push
-- Free memory on success ACK
-- Drop on failure (metric only)
+- Periodic flush by the local writer
 
 ## 8. Invariants
 - WireGuard cryptographic verification is always performed
@@ -170,22 +163,15 @@
 
 ## 7. Logging（オプション機能）
 ### 実装制約
-- datapath は enqueue のみ
-- I/O・同期処理は禁止
+- datapath から直接ログ出力してよい（MVP）
 ### 出力先（MVP）
 - ログ出力はローカルのみ（例: file/stdout）とし、集約は行わない
 
 ### 実装
-- lock-free ring buffer
-- 常駐 daemon が非同期で dequeue
+- ローカルへのシンプルな書き込み
 
 ### flush 条件
-- バッファ使用率 OR 経過時間
-
-### push
-- 非同期 batch push
-- 成功 ACK でメモリ解放
-- 失敗時は drop（metric のみ）
+- ローカル書き込みの定期フラッシュ
 
 ## 8. 不変条件
 - WireGuard の暗号検証は常に実行される

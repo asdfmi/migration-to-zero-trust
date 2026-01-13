@@ -40,7 +40,9 @@ type AuthzConfig struct {
 }
 
 type LoggingConfig struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled bool   `yaml:"enabled"`
+	Path    string `yaml:"path"`
+	Group   int    `yaml:"group"`
 }
 
 func Load(path string) (Config, error) {
@@ -56,6 +58,12 @@ func Load(path string) (Config, error) {
 
 	if cfg.Authz.Mode == "" {
 		cfg.Authz.Mode = AuthzModeObserve
+	}
+	if cfg.Logging.Path == "" {
+		cfg.Logging.Path = "/var/log/wg-server/events.jsonl"
+	}
+	if cfg.Logging.Group == 0 {
+		cfg.Logging.Group = 100
 	}
 
 	return cfg, nil
@@ -105,6 +113,12 @@ func (c Config) Validate() error {
 		// ok
 	default:
 		errs = append(errs, "authz.mode must be observe or enforce")
+	}
+	if c.Logging.Group < 0 || c.Logging.Group > 65535 {
+		errs = append(errs, "logging.group must be 0-65535")
+	}
+	if strings.TrimSpace(c.Logging.Path) == "" {
+		errs = append(errs, "logging.path must not be empty")
 	}
 
 	if len(errs) > 0 {

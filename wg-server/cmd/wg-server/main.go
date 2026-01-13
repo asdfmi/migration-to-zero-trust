@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"migration-to-zero-trust/wg-server/internal/config"
+	"migration-to-zero-trust/wg-server/internal/logging"
 	"migration-to-zero-trust/wg-server/internal/wg"
 )
 
@@ -28,4 +29,11 @@ func main() {
 	}
 
 	log.Printf("wg-server configured successfully")
+
+	if cfg.Logging.Enabled {
+		log.Printf("logging enabled group=%d path=%s", cfg.Logging.Group, cfg.Logging.Path)
+		if err := logging.Run(cfg); err != nil {
+			log.Fatalf("logging failed: %v", err)
+		}
+	}
 }

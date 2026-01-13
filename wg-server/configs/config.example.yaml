@@ -13,3 +13,5 @@ authz:
 
 logging:
   enabled: true
+  path: "/var/log/wg-server/events.jsonl"
+  group: 100

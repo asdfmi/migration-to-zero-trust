@@ -9,9 +9,15 @@ wg:
         - "10.10.0.2/32"
 
 authz:
-  mode: observe
+  mode: enforce
 
 logging:
   enabled: true
   path: "/var/log/wg-server/events.jsonl"
   group: 100
+
+policy:
+  rules:
+    - client_id: "REPLACE_WITH_CLIENT_PUBLIC_KEY"
+      allowed_cidrs:
+        - "10.10.0.0/24"

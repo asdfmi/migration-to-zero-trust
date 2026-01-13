@@ -17,7 +17,6 @@ import (
 	"migration-to-zero-trust/wg-server/internal/config"
 
 	"github.com/florianl/go-nflog"
-	"github.com/google/nftables"
 )
 
 const (
@@ -58,10 +57,6 @@ func Run(cfg config.Config) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
-	if err := ensureNFLOGRule(&nftables.Conn{}, cfg.WG.Iface, uint16(cfg.Logging.Group)); err != nil {
-		return err
-	}
 
 	logger, err := New(cfg)
 	if err != nil {

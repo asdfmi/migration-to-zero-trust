@@ -24,7 +24,7 @@
   - client ID
   - client public key
   - AllowedIPs (logical CIDR)
-  - (Optional) policy definition
+  - (Optional) policy definition (L3/IPv4 allowlist only)
 
 ## 5. Client / WireGuard
 ### Client
@@ -54,7 +54,7 @@
 ### Required Functions
 - authz_mode flag
   - observe: do not perform authorization; always forward
-  - enforce: allow/deny based on policy
+  - enforce: allow/deny based on L3/IPv4 allowlist policy
 - logging_enabled flag
   - on/off (independent of authz_mode)
 - authz_mode and logging_enabled are managed as local WG server settings
@@ -119,7 +119,7 @@
   - client ID
   - client 公開鍵
   - AllowedIPs（論理 CIDR）
-  - （任意）policy 定義
+  - （任意）policy 定義（L3/IPv4 の allowlist のみ）
 
 ## 5. Client / WireGuard
 ### Client
@@ -149,7 +149,7 @@
 ### 必須機能
 - authz_mode フラグ
   - observe: 認可判断を行わず必ず forward
-  - enforce: policy に基づき allow/deny
+  - enforce: L3/IPv4 の allowlist policy に基づき allow/deny
 - logging_enabled フラグ
   - on/off（authz_mode とは独立）
 - authz_mode と logging_enabled は WG server のローカル設定で管理する

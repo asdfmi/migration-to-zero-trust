@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"migration-to-zero-trust/wg-server/internal/config"
+	"migration-to-zero-trust/wg-server/internal/firewall"
 	"migration-to-zero-trust/wg-server/internal/logging"
 	"migration-to-zero-trust/wg-server/internal/wg"
 )
@@ -29,6 +30,10 @@ func main() {
 	}
 
 	log.Printf("wg-server configured successfully")
+
+	if err := firewall.Apply(cfg); err != nil {
+		log.Fatalf("firewall setup failed: %v", err)
+	}
 
 	if cfg.Logging.Enabled {
 		log.Printf("logging enabled group=%d path=%s", cfg.Logging.Group, cfg.Logging.Path)

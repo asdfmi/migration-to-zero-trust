@@ -17,10 +17,11 @@
 ### WG server
 - Receives inner packets decrypted by WG and forwards to the next hop
 - Holds authz_mode and logging_enabled
-- authz_mode and logging_enabled are managed locally on the WG server (not distributed by the Control Plane)
+- authz_mode and logging_enabled are managed locally on the WG server
 
-### Control Plane
-- Responsible only for distributing keys, AllowedIPs, and policy
+### Configuration (MVP)
+- Keys, AllowedIPs, and policy are managed via local config files
+- Apply changes by restarting or reloading the runtimes
 
 ### Logging
 - Datapath only enqueues
@@ -30,11 +31,11 @@
 - Source -> public endpoint -> WG server -> VPC server
 - On the VPC side, route return traffic for the WG tunnel CIDR back to the WG server
 
-## 4. Management Ledger (Minimum Info Held by Control Plane)
+## 4. Configuration Inventory (Minimum Required Info)
 - WG server public endpoint (IP:Port) and public key
 - Source public key
 - Mapping between target servers (private IP/CIDR) and policy
-- Distribution targets for AllowedIPs
+- AllowedIPs scope per client
 
 ## 5. Migration Policy (per server)
 - Switch to WG routes per target server
@@ -46,17 +47,17 @@
 ## 6. Phased Migration (Example)
 ### Phase 0: Status quo
 - Operate with the existing VPN only
-- WG / Control Plane not introduced
+- WG not introduced
 
 ### Phase 1: Base setup
-- Place WG server and Control Plane in the VPC
+- Place WG server in the VPC
 - Prepare the public endpoint
 - Prepare with authz_mode=observe and logging_enabled=on
 - Do not switch routing yet
 
 ### Phase 2: Pilot (observe)
 - Select the smallest possible target server scope
-- Distribute AllowedIPs and policy
+- Configure AllowedIPs and policy in local files
 - Keep authz_mode=observe and collect logs
 
 ### Phase 3: Expand observation
@@ -74,8 +75,8 @@
 
 ## 7. Monitoring and Operations
 - Monitor logging queue usage and drop rate
-- Update policy via push from the Control Plane
-- Rotate keys by regenerating on the client side and reflecting the public key in the Control Plane
+- Update policy by updating local config files and reapplying
+- Rotate keys by regenerating on the client side and updating local configs
 
 ## 8. Rollback
 - Set authz_mode back to observe
@@ -103,10 +104,11 @@
 ### WG server
 - WG で復号された inner packet を受け、次ホップへ forward
 - authz_mode と logging_enabled を保持
-- authz_mode と logging_enabled は WG server のローカル設定で管理する（Control Plane から配布しない）
+- authz_mode と logging_enabled は WG server のローカル設定で管理する
 
-### Control Plane
-- 鍵・AllowedIPs・policy の配布のみを担当
+### 設定（MVP）
+- 鍵・AllowedIPs・policy はローカル設定ファイルで管理する
+- 変更は runtime の再起動または再読み込みで反映する
 
 ### Logging
 - datapath は enqueue のみ
@@ -116,11 +118,11 @@
 - 接続元 → 公開エンドポイント → WG server → VPC 内サーバ という経路
 - VPC 側は WG トンネル CIDR の戻り経路を WG server へ向ける
 
-## 4. 管理台帳（Control Plane が保持する最小情報）
+## 4. 設定台帳（必要最小限の情報）
 - WG server の公開エンドポイント（IP:Port）と公開鍵
 - 接続元の公開鍵
 - 対象サーバ（private IP / CIDR）と policy の対応
-- AllowedIPs の配布対象
+- client ごとの AllowedIPs 範囲
 
 ## 5. 移行方針（server 単位）
 - 対象サーバ単位で WG 経路に切り替える
@@ -132,17 +134,17 @@
 ## 6. 段階移行（例）
 ### Phase 0: 現状維持
 - 既存 VPN のみで運用
-- WG / Control Plane は未導入
+- WG は未導入
 
 ### Phase 1: 基盤導入
-- WG server と Control Plane を VPC 内に配置
+- WG server を VPC 内に配置
 - 公開エンドポイントを用意
 - authz_mode=observe、logging_enabled=on で準備
 - ルーティングはまだ切り替えない
 
 ### Phase 2: パイロット（observe）
 - 対象サーバを最小範囲で選定
-- AllowedIPs と policy を配布
+- AllowedIPs と policy をローカル設定に反映
 - authz_mode=observe を維持し、ログを収集
 
 ### Phase 3: 観測拡大
@@ -160,8 +162,8 @@
 
 ## 7. 監視と運用
 - logging queue の使用率、drop 率を監視する
-- policy の更新は Control Plane から push する
-- 鍵ローテーションは client 側で再生成し、Control Plane に公開鍵を反映する
+- policy の更新はローカル設定を更新して再適用する
+- 鍵ローテーションは client 側で再生成し、ローカル設定に反映する
 
 ## 8. 切り戻し
 - authz_mode を observe に戻す

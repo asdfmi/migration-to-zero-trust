@@ -1,14 +1,17 @@
-# wg-client (MVP)
-Runs the WireGuard client runtime with a minimal setup.
+# wg-client
 
-## Configuration
-- `wg-client/configs/config.example.yaml`
+WireGuard client that syncs config from control-plane.
 
 ## Run
 ```bash
-sudo ./wg-client --config ./wg-client/configs/config.example.yaml
+sudo ./wg-client up \
+  --cp-url <url> \
+  --username <user> \
+  --password <pass>
 ```
 
-## Notes
-- Requires root privileges
-- Adds routes based on AllowedIPs
+## Commands
+- `up`: connect
+- `down`: disconnect
+- `status`: show status
+- `resources`: list allowed CIDRs

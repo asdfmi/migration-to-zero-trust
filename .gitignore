@@ -1,0 +1,9 @@
+control-plane/control-plane
+wg-server/wg-server
+wg-client/wg-client
+
+*.db
+
+.env
+
+deploy.md

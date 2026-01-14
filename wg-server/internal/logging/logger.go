@@ -1,75 +1,42 @@
 package logging
 
 import (
-	"bufio"
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
+	"log"
 	"net"
-	"os"
-	"os/signal"
-	"path/filepath"
 	"sync/atomic"
-	"syscall"
 	"time"
 
-	"migration-to-zero-trust/wg-server/internal/config"
+	"migration-to-zero-trust/wg-server/internal/controlplane"
 
-	"github.com/florianl/go-nflog"
+	"github.com/florianl/go-nflog/v2"
 )
 
 const (
 	defaultQueueSize = 1024
+	pushInterval     = 10 * time.Second
+	maxBatchSize     = 100
 )
 
-type Event struct {
-	Timestamp time.Time `json:"ts"`
-	SrcIP     string    `json:"src_ip,omitempty"`
-	SrcPort   int       `json:"src_port,omitempty"`
-	DstIP     string    `json:"dst_ip,omitempty"`
-	DstPort   int       `json:"dst_port,omitempty"`
-	Proto     string    `json:"proto,omitempty"`
-	ClientID  string    `json:"client_id,omitempty"`
-	Prefix    string    `json:"prefix,omitempty"`
-	InIface   string    `json:"in_iface,omitempty"`
-	OutIface  string    `json:"out_iface,omitempty"`
-	Length    int       `json:"length"`
-}
-
 type peerNet struct {
-	net *net.IPNet
-	id  string
+	net  *net.IPNet
+	id   string
+	name string
 }
 
 type Logger struct {
-	nflog   *nflog.Nflog
-	events  chan Event
+	nf      *nflog.Nflog
+	events  chan controlplane.LogEntry
 	peers   []peerNet
-	path    string
+	cp      *controlplane.Client
 	dropped uint64
 }
 
-func Run(cfg config.Config) error {
-	if !cfg.Logging.Enabled {
-		return nil
-	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	logger, err := New(cfg)
-	if err != nil {
-		return err
-	}
-	defer logger.Close()
-
-	return logger.run(ctx)
-}
-
-func New(cfg config.Config) (*Logger, error) {
+func NewLogger(loggingGroup int, cp *controlplane.Client) (*Logger, error) {
 	nf, err := nflog.Open(&nflog.Config{
-		Group:    uint16(cfg.Logging.Group),
+		Group:    uint16(loggingGroup),
 		Copymode: nflog.CopyPacket,
 	})
 	if err != nil {
@@ -77,28 +44,43 @@ func New(cfg config.Config) (*Logger, error) {
 	}
 
 	return &Logger{
-		nflog:  nf,
-		events: make(chan Event, defaultQueueSize),
-		peers:  buildPeers(cfg),
-		path:   cfg.Logging.Path,
+		nf:     nf,
+		events: make(chan controlplane.LogEntry, defaultQueueSize),
+		cp:     cp,
 	}, nil
 }
 
-func (l *Logger) Close() error {
-	if l.nflog == nil {
-		return nil
+func (l *Logger) UpdatePeers(policies []controlplane.Policy) {
+	peers := make([]peerNet, 0)
+	for _, policy := range policies {
+		for _, cidr := range policy.AllowedIPs {
+			_, ipNet, err := net.ParseCIDR(cidr)
+			if err != nil {
+				continue
+			}
+			peers = append(peers, peerNet{net: ipNet, id: policy.ClientID, name: policy.ClientName})
+		}
 	}
-	return l.nflog.Close()
+	l.peers = peers
 }
 
-func (l *Logger) run(ctx context.Context) error {
-	if err := l.startWriter(ctx); err != nil {
-		return err
+func (l *Logger) Close() error {
+	if l == nil || l.nf == nil {
+		return nil
 	}
+	return l.nf.Close()
+}
+
+func (l *Logger) Run(ctx context.Context) error {
+	if l == nil {
+		return nil
+	}
+
+	go l.startPusher(ctx)
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- l.nflog.Register(ctx, l.handle)
+		errCh <- l.nf.Register(ctx, l.handle)
 	}()
 
 	for {
@@ -114,77 +96,64 @@ func (l *Logger) run(ctx context.Context) error {
 	}
 }
 
-func (l *Logger) startWriter(ctx context.Context) error {
-	dir := filepath.Dir(l.path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("log dir: %w", err)
-	}
+func (l *Logger) startPusher(ctx context.Context) {
+	ticker := time.NewTicker(pushInterval)
+	defer ticker.Stop()
 
-	file, err := os.OpenFile(l.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o640)
-	if err != nil {
-		return fmt.Errorf("log open: %w", err)
-	}
+	batch := make([]controlplane.LogEntry, 0, maxBatchSize)
 
-	writer := bufio.NewWriter(file)
-	ticker := time.NewTicker(1 * time.Second)
-
-	go func() {
-		defer ticker.Stop()
-		defer file.Close()
-		defer writer.Flush()
-
-		for {
-			select {
-			case ev := <-l.events:
-				line, err := json.Marshal(ev)
-				if err != nil {
-					continue
-				}
-				_, _ = writer.Write(line)
-				_ = writer.WriteByte('\n')
-			case <-ticker.C:
-				_ = writer.Flush()
-			case <-ctx.Done():
-				_ = writer.Flush()
-				return
+	for {
+		select {
+		case ev := <-l.events:
+			batch = append(batch, ev)
+			if len(batch) >= maxBatchSize {
+				l.pushBatch(ctx, batch)
+				batch = batch[:0]
 			}
+		case <-ticker.C:
+			if len(batch) > 0 {
+				l.pushBatch(ctx, batch)
+				batch = batch[:0]
+			}
+		case <-ctx.Done():
+			if len(batch) > 0 {
+				l.pushBatch(context.Background(), batch)
+			}
+			return
 		}
-	}()
+	}
+}
 
-	return nil
+func (l *Logger) pushBatch(ctx context.Context, batch []controlplane.LogEntry) {
+	if err := l.cp.PushLogs(ctx, batch); err != nil {
+		log.Printf("push logs error: %v", err)
+	}
 }
 
 func (l *Logger) handle(attrs nflog.Attribute) int {
-	if attrs.Payload == nil {
+	if attrs.Payload == nil || len(*attrs.Payload) == 0 {
 		return 0
 	}
 
-	ev := Event{
+	payload := *attrs.Payload
+
+	ev := controlplane.LogEntry{
 		Timestamp: time.Now(),
-		Length:    len(attrs.Payload),
+		Length:    len(payload),
 	}
 
 	if attrs.Timestamp != nil {
 		ev.Timestamp = *attrs.Timestamp
 	}
-	if attrs.Prefix != nil {
-		ev.Prefix = *attrs.Prefix
-	}
-	if attrs.InDev != nil {
-		ev.InIface = ifaceName(int(*attrs.InDev))
-	}
-	if attrs.OutDev != nil {
-		ev.OutIface = ifaceName(int(*attrs.OutDev))
-	}
 
-	if pkt, ok := parsePacket(attrs.Payload); ok {
+	if pkt, ok := parsePacket(payload); ok {
 		ev.SrcIP = pkt.srcIP
 		ev.DstIP = pkt.dstIP
 		ev.SrcPort = pkt.srcPort
 		ev.DstPort = pkt.dstPort
 		ev.Proto = pkt.proto
 		if pkt.srcIP != "" {
-			ev.ClientID = matchClient(l.peers, net.ParseIP(pkt.srcIP))
+			ev.ClientID, ev.ClientName = l.matchClient(net.ParseIP(pkt.srcIP))
 		}
 	}
 
@@ -195,6 +164,18 @@ func (l *Logger) handle(attrs nflog.Attribute) int {
 	}
 
 	return 0
+}
+
+func (l *Logger) matchClient(ip net.IP) (string, string) {
+	if ip == nil {
+		return "", ""
+	}
+	for _, peer := range l.peers {
+		if peer.net.Contains(ip) {
+			return peer.id, peer.name
+		}
+	}
+	return "", ""
 }
 
 type parsedPacket struct {
@@ -287,38 +268,4 @@ func protoName(proto byte) string {
 	default:
 		return fmt.Sprintf("proto_%d", proto)
 	}
-}
-
-func ifaceName(index int) string {
-	iface, err := net.InterfaceByIndex(index)
-	if err != nil {
-		return ""
-	}
-	return iface.Name
-}
-
-func buildPeers(cfg config.Config) []peerNet {
-	peers := make([]peerNet, 0)
-	for _, peer := range cfg.WG.Peers {
-		for _, cidr := range peer.AllowedIPs {
-			_, ipNet, err := net.ParseCIDR(cidr)
-			if err != nil {
-				continue
-			}
-			peers = append(peers, peerNet{net: ipNet, id: peer.PublicKey})
-		}
-	}
-	return peers
-}
-
-func matchClient(peers []peerNet, ip net.IP) string {
-	if ip == nil {
-		return ""
-	}
-	for _, peer := range peers {
-		if peer.net.Contains(ip) {
-			return peer.id
-		}
-	}
-	return ""
 }

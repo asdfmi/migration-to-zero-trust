@@ -1,0 +1,91 @@
+{{define "gateway_detail.html"}}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{.Title}}</title>
+    <style>
+      :root { color-scheme: light; }
+      body { font-family: Arial, sans-serif; margin: 24px; color: #111; background: #f6f7f9; }
+      header { margin-bottom: 16px; }
+      nav a { margin-right: 12px; text-decoration: none; color: #1a4b8c; padding: 4px 8px; border-radius: 4px; }
+      nav a.active { background: #1a4b8c; color: #fff; }
+      .card { background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 16px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e3e6ea; font-size: 14px; }
+      .muted { color: #666; font-size: 12px; }
+      .info-grid { display: grid; grid-template-columns: 120px 1fr; gap: 8px; margin-bottom: 16px; }
+      .info-label { font-weight: bold; }
+      button, select { padding: 6px 12px; cursor: pointer; }
+      select { margin-right: 8px; }
+      .filter-form { margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>{{.Title}}</h1>
+      <nav>
+        <a href="/pairs">Pairs</a>
+        <a href="/clients">Clients</a>
+        <a href="/resources">Resources</a>
+        <a href="/gateways">Gateways</a>
+      </nav>
+    </header>
+    <div class="card">
+      <h2>Gateway Info</h2>
+      <div class="info-grid">
+        <span class="info-label">Name:</span>
+        <span>{{.Gateway.Name}}</span>
+        <span class="info-label">Endpoint:</span>
+        <span>{{.Gateway.Endpoint}}</span>
+        <span class="info-label">Tunnel Subnet:</span>
+        <span>{{.Gateway.TunnelSubnet}}</span>
+        <span class="info-label">Status:</span>
+        <span>{{if .Gateway.WGPublicKey}}<span style="color:green">Registered</span>{{else}}<span class="muted">Not registered</span>{{end}}</span>
+      </div>
+      <a href="/gateways">&larr; Back to Gateways</a>
+    </div>
+    <div class="card">
+      <h2>Access Logs</h2>
+      <form method="get" action="/gateways/{{.Gateway.ID}}" class="filter-form">
+        <label>Filter by Resource:</label>
+        <select name="resource_id">
+          <option value="">All</option>
+          {{range .Resources}}
+          <option value="{{.ID}}" {{if eq .ID $.SelectedResourceID}}selected{{end}}>{{.Name}} ({{.CIDR}})</option>
+          {{end}}
+        </select>
+        <button type="submit">Filter</button>
+      </form>
+      {{if .Logs}}
+      <table>
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Client</th>
+            <th>Source</th>
+            <th>Destination</th>
+            <th>Protocol</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Logs}}
+          <tr>
+            <td><span class="muted">{{.Timestamp.Format "2006-01-02 15:04:05"}}</span></td>
+            <td>{{if .ClientName}}{{.ClientName}}{{else}}<span class="muted">-</span>{{end}}</td>
+            <td>{{.SrcIP}}:{{.SrcPort}}</td>
+            <td>{{.DstIP}}:{{.DstPort}}</td>
+            <td>{{.Protocol}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      <p class="muted">Showing last 100 entries</p>
+      {{else}}
+      <p class="muted">No logs found.</p>
+      {{end}}
+    </div>
+  </body>
+</html>
+{{end}}

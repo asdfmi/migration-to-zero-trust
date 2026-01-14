@@ -5,17 +5,18 @@ import (
 	"fmt"
 	"net"
 
-	"migration-to-zero-trust/wg-server/internal/config"
+	"migration-to-zero-trust/wg-server/internal/controlplane"
 
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
-	"golang.org/x/sys/unix"
 )
 
 const (
 	nftTableName      = "filter"
+	nftNatTableName   = "nat"
 	nftBaseChainName  = "forward"
 	nftPolicyChain    = "wg-authz"
+	nftPostroutingChain = "postrouting"
 	nflogPrefix       = "wg"
 	iifRegister       = 1
 	srcAddrRegister   = 2
@@ -24,17 +25,28 @@ const (
 	ipv4DstAddrOffset = 16
 )
 
-func Apply(cfg config.Config) error {
-	if cfg.Authz.Mode != config.AuthzModeEnforce && !cfg.Logging.Enabled {
-		return nil
-	}
+const defaultLoggingGroup = 100
 
+type Manager struct {
+	iface       string
+	table       *nftables.Table
+	policyChain *nftables.Chain
+}
+
+func NewManager(iface string) *Manager {
+	return &Manager{
+		iface: iface,
+	}
+}
+
+func (m *Manager) Setup() error {
 	conn := &nftables.Conn{}
 
 	table, err := ensureTable(conn)
 	if err != nil {
 		return err
 	}
+	m.table = table
 
 	baseChain, err := ensureBaseChain(conn, table)
 	if err != nil {
@@ -45,28 +57,45 @@ func Apply(cfg config.Config) error {
 	if err != nil {
 		return err
 	}
+	m.policyChain = policyChain
 
-	if err := ensureJumpRule(conn, table, baseChain, cfg.WG.Iface, policyChain.Name); err != nil {
+	if err := ensureJumpRule(conn, table, baseChain, m.iface, policyChain.Name); err != nil {
 		return err
 	}
 
-	conn.FlushChain(policyChain)
-
-	if cfg.Logging.Enabled {
-		conn.AddRule(buildLogRule(table, policyChain, uint16(cfg.Logging.Group)))
+	// Setup NAT/masquerade for traffic from wg interface
+	if err := m.setupNAT(conn); err != nil {
+		return err
 	}
 
-	if cfg.Authz.Mode == config.AuthzModeEnforce {
-		rules, err := buildPolicyRules(cfg, table, policyChain)
-		if err != nil {
-			return err
-		}
-		for _, rule := range rules {
-			conn.AddRule(rule)
-		}
+	return nil
+}
+
+func (m *Manager) ApplyPolicies(policies []controlplane.Policy) error {
+	conn := &nftables.Conn{}
+
+	conn.FlushChain(m.policyChain)
+
+	// Always enable logging
+	conn.AddRule(buildLogRule(m.table, m.policyChain, defaultLoggingGroup))
+
+	// Build rules for enforce mode targets and check if any exist
+	hasEnforceRules := false
+	rules, err := buildPolicyRules(policies, m.table, m.policyChain)
+	if err != nil {
+		return err
+	}
+
+	for _, rule := range rules {
+		conn.AddRule(rule)
+		hasEnforceRules = true
+	}
+
+	// If any enforce rules exist, add drop rule at the end
+	if hasEnforceRules {
 		conn.AddRule(&nftables.Rule{
-			Table: table,
-			Chain: policyChain,
+			Table: m.table,
+			Chain: m.policyChain,
 			Exprs: []expr.Any{
 				&expr.Verdict{Kind: expr.VerdictDrop},
 			},
@@ -217,40 +246,41 @@ func buildLogRule(table *nftables.Table, chain *nftables.Chain, group uint16) *n
 		Chain: chain,
 		Exprs: []expr.Any{
 			&expr.Log{
-				Key:   (1 << unix.NFTA_LOG_GROUP) | (1 << unix.NFTA_LOG_PREFIX) | (1 << unix.NFTA_LOG_FLAGS),
 				Group: group,
-				Flags: expr.LogFlagsNFLog,
-				Data:  []byte(nflogPrefix),
+				Key:   1 << 1, // NFTA_LOG_GROUP
 			},
 		},
 	}
 }
 
-func buildPolicyRules(cfg config.Config, table *nftables.Table, chain *nftables.Chain) ([]*nftables.Rule, error) {
-	peerMap := make(map[string][]*net.IPNet, len(cfg.WG.Peers))
-	for _, peer := range cfg.WG.Peers {
-		for _, cidr := range peer.AllowedIPs {
+func buildPolicyRules(policies []controlplane.Policy, table *nftables.Table, chain *nftables.Chain) ([]*nftables.Rule, error) {
+	var rules []*nftables.Rule
+
+	for _, policy := range policies {
+		srcNets := make([]*net.IPNet, 0, len(policy.AllowedIPs))
+		for _, cidr := range policy.AllowedIPs {
 			_, ipNet, err := net.ParseCIDR(cidr)
 			if err != nil {
-				return nil, fmt.Errorf("peer allowed_ips parse: %w", err)
+				return nil, fmt.Errorf("parse allowed_ips: %w", err)
 			}
 			if ipNet.IP.To4() == nil {
-				return nil, fmt.Errorf("peer allowed_ips must be IPv4 for policy enforcement: %s", cidr)
+				continue
 			}
-			peerMap[peer.PublicKey] = append(peerMap[peer.PublicKey], ipNet)
+			srcNets = append(srcNets, ipNet)
 		}
-	}
 
-	var rules []*nftables.Rule
-	for _, rule := range cfg.Policy.Rules {
-		srcNets := peerMap[rule.ClientID]
-		for _, dstCIDR := range rule.AllowedCIDRs {
-			_, dstNet, err := net.ParseCIDR(dstCIDR)
+		for _, target := range policy.AllowedCIDRs {
+			// Only create rules for enforce mode
+			if target.Mode != "enforce" {
+				continue
+			}
+
+			_, dstNet, err := net.ParseCIDR(target.CIDR)
 			if err != nil {
-				return nil, fmt.Errorf("policy allowed_cidrs parse: %w", err)
+				return nil, fmt.Errorf("parse allowed_cidrs: %w", err)
 			}
 			if dstNet.IP.To4() == nil {
-				return nil, fmt.Errorf("policy allowed_cidrs must be IPv4: %s", dstCIDR)
+				continue
 			}
 
 			for _, srcNet := range srcNets {
@@ -266,10 +296,6 @@ func buildPolicyRules(cfg config.Config, table *nftables.Table, chain *nftables.
 				})
 			}
 		}
-	}
-
-	if len(rules) == 0 {
-		return nil, fmt.Errorf("policy rules did not produce any nftables rules")
 	}
 
 	return rules, nil
@@ -296,4 +322,50 @@ func matchIPv4CIDR(offset uint32, reg uint32, ipNet *net.IPNet) []expr.Any {
 			Data:     ipNet.IP.To4(),
 		},
 	}
+}
+
+func (m *Manager) setupNAT(conn *nftables.Conn) error {
+	// Create or get nat table
+	natTable := &nftables.Table{
+		Name:   nftNatTableName,
+		Family: nftables.TableFamilyINet,
+	}
+	conn.AddTable(natTable)
+
+	// Create postrouting chain
+	policy := nftables.ChainPolicyAccept
+	postroutingChain := &nftables.Chain{
+		Name:     nftPostroutingChain,
+		Table:    natTable,
+		Hooknum:  nftables.ChainHookPostrouting,
+		Priority: nftables.ChainPriorityNATSource,
+		Type:     nftables.ChainTypeNAT,
+		Policy:   &policy,
+	}
+	conn.AddChain(postroutingChain)
+
+	// Add masquerade rule for traffic from wg interface
+	// iifname "wg0" masquerade
+	conn.AddRule(&nftables.Rule{
+		Table: natTable,
+		Chain: postroutingChain,
+		Exprs: []expr.Any{
+			&expr.Meta{
+				Key:      expr.MetaKeyIIFNAME,
+				Register: iifRegister,
+			},
+			&expr.Cmp{
+				Op:       expr.CmpOpEq,
+				Register: iifRegister,
+				Data:     []byte(m.iface + "\x00"),
+			},
+			&expr.Masq{},
+		},
+	})
+
+	if err := conn.Flush(); err != nil {
+		return fmt.Errorf("nftables setup NAT: %w", err)
+	}
+
+	return nil
 }

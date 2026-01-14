@@ -1,0 +1,77 @@
+{{define "pairs.html"}}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{.Title}}</title>
+    <style>
+      :root { color-scheme: light; }
+      body { font-family: Arial, sans-serif; margin: 24px; color: #111; background: #f6f7f9; }
+      header { margin-bottom: 16px; }
+      nav a { margin-right: 12px; text-decoration: none; color: #1a4b8c; padding: 4px 8px; border-radius: 4px; }
+      nav a.active { background: #1a4b8c; color: #fff; }
+      .card { background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 16px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e3e6ea; font-size: 14px; }
+      input, select, button { padding: 6px 8px; margin-right: 8px; margin-bottom: 8px; }
+      .muted { color: #666; font-size: 12px; }
+      form.inline { display: inline; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>{{.Title}}</h1>
+      <nav>
+        <a href="/pairs" class="active">Pairs</a>
+        <a href="/clients">Clients</a>
+        <a href="/resources">Resources</a>
+        <a href="/gateways">Gateways</a>
+      </nav>
+    </header>
+    <div class="card">
+      <h2>Create Pair</h2>
+      <form method="post" action="/pairs">
+        <select name="client_id" required>
+          <option value="">Select client</option>
+          {{range .Clients}}
+          <option value="{{.ID}}">{{.Name}}</option>
+          {{end}}
+        </select>
+        <select name="resource_id" required>
+          <option value="">Select resource</option>
+          {{range .Resources}}
+          <option value="{{.ID}}">{{.Name}} ({{.CIDR}})</option>
+          {{end}}
+        </select>
+        <button type="submit">Create</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Pairs</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Client</th>
+            <th>Resource</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Pairs}}
+          <tr>
+            <td>{{.Client.Name}}</td>
+            <td>{{.Resource.Name}} ({{.Resource.CIDR}})</td>
+            <td>
+              <form class="inline" method="post" action="/pairs/{{.ID}}/delete">
+                <button type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </body>
+</html>
+{{end}}

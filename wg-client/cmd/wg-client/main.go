@@ -1,31 +1,27 @@
 package main
 
 import (
-	"flag"
-	"log"
+	"os"
 
-	"migration-to-zero-trust/wg-client/internal/config"
-	"migration-to-zero-trust/wg-client/internal/wg"
+	"github.com/spf13/cobra"
+
+	"migration-to-zero-trust/wg-client/internal/cli"
 )
 
 func main() {
-	configPath := flag.String("config", "/etc/wg-client/config.yaml", "path to config file")
-	flag.Parse()
-
-	cfg, err := config.Load(*configPath)
-	if err != nil {
-		log.Fatalf("config load failed: %v", err)
+	root := &cobra.Command{
+		Use:   "wg-client",
+		Short: "WireGuard client managed by control plane",
 	}
 
-	if err := cfg.Validate(); err != nil {
-		log.Fatalf("config invalid: %v", err)
+	root.AddCommand(
+		cli.NewUpCommand(),
+		cli.NewDownCommand(),
+		cli.NewStatusCommand(),
+		cli.NewResourcesCommand(),
+	)
+
+	if err := root.Execute(); err != nil {
+		os.Exit(1)
 	}
-
-	log.Printf("starting wg-client iface=%s", cfg.WG.Iface)
-
-	if err := wg.Apply(cfg); err != nil {
-		log.Fatalf("wg apply failed: %v", err)
-	}
-
-	log.Printf("wg-client configured successfully")
 }

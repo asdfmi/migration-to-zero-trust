@@ -1,109 +1,242 @@
-# MVP WG Migration
+# Migration Scenario Example
 
-## Migration Target
-This guide targets a GCP setup with a private-only protected VM reachable only through a classic Cloud VPN tunnel.
-The concrete target is:
-
-- VPC name: zt-migration-vpc
-- Subnet: IPv4 only, primary 10.0.0.0/29
-- Protected VM: zt-migration-protected-vm
-  - Boot image: debian-12-bookworm-v20251209 (x86_64)
-  - Internal IP: 10.0.0.2 (no external IP)
-  - Network tag: https-server
-- VPN tunnel: zt-migration-vpn-tunnel (route-based, IKEv2)
-  - Remote peer gateway IP: <REMOTE_PEER_PUBLIC_IP>
-  - Cloud VPN gateway: zt-migration-vpn-gw
-  - Gateway IP: <CLOUD_VPN_GATEWAY_PUBLIC_IP>
-- Cloud VPN gateway: zt-migration-vpn-gw (classic, IPv4 single-stack)
-  - External IP: <CLOUD_VPN_GATEWAY_PUBLIC_IP>
-
-## Migration Policy (per server)
-- Switch to WG routes per target server
-- Reach target servers via WG
-- Keep the existing VPN for non-target servers
-- Do not create two paths (VPN and WG) for the same server
-- Start without enforcement (enforce) and prioritize logging
-
-## Phased Migration (Example)
-### Phase 0: Status quo
-- Operate with the existing VPN only
-- WG not introduced
-
-### Phase 1: Base setup
-- Place WG server in the VPC
-- Prepare the public endpoint
-- Prepare with authz_mode=observe and logging_enabled=on
-- Do not switch routing yet
-
-### Phase 2: Pilot (observe)
-- Select the smallest possible target server scope
-- Configure AllowedIPs and policy in local files
-- Keep authz_mode=observe and collect logs
-
-### Phase 3: Expand observation
-- Expand the target server scope
-- Build and adjust policy based on logs
-- Confirm no increase in drop rate or latency
-
-### Phase 4: enforce
-- Set authz_mode=enforce for target servers
-- If failures occur, immediately switch authz_mode back to observe
-
-### Phase 5: Migration complete
-- Major servers are reached via WG
-- Remove the existing VPN
+This document illustrates the phased migration flow using a hypothetical customer environment.
 
 ---
 
-## 移行対象
-GCP で private-only の protected VM を持ち、classic Cloud VPN の tunnel 経由でのみ到達できる構成を移行対象とする。
-具体構成は以下:
+## Customer Environment
 
-- VPC 名: zt-migration-vpc
-- Subnet: IPv4 only, primary 10.0.0.0/29
-- Protected VM: zt-migration-protected-vm
-  - Boot image: debian-12-bookworm-v20251209 (x86_64)
-  - Internal IP: 10.0.0.2 (external IP なし)
-  - Network tag: https-server
-- VPN tunnel: zt-migration-vpn-tunnel (route-based, IKEv2)
-  - Remote peer gateway IP: <REMOTE_PEER_PUBLIC_IP>
-  - Cloud VPN gateway: zt-migration-vpn-gw
-  - Gateway IP: <CLOUD_VPN_GATEWAY_PUBLIC_IP>
-- Cloud VPN gateway: zt-migration-vpn-gw (classic, IPv4 single-stack)
-  - External IP: <CLOUD_VPN_GATEWAY_PUBLIC_IP>
+Two VMs on GCP. No external IPs, accessible only via Cloud VPN.
 
-## 移行方針（server 単位）
-- 対象サーバ単位で WG 経路に切り替える
-- 移行対象サーバへの通信は WG で到達させる
-- 既存 VPN は非対象サーバのために維持する
-- 同一サーバに VPN と WG の二経路を作らない
-- 最初は制御（enforce）をせず、logging を優先する
+### Target Resources
+| Resource | Details |
+|----------|---------|
+| VPC | zt-migration-vpc |
+| Subnet | zt-migration-subnet (10.0.0.0/29, IPv4 only) |
+| protected-vm-1 | 10.0.0.2, Debian 12, no external IP |
+| protected-vm-2 | 10.0.0.3, Debian 12, no external IP |
+| Cloud VPN Gateway | zt-migration-vpn-gw (classic, IKEv2), has external IP |
 
-## 段階移行（例）
-### Phase 0: 現状維持
-- 既存 VPN のみで運用
-- WG は未導入
+```
+                              +-----------------------------+
+[Client] <--- Cloud VPN ----> | [VPN GW] -----> p-vm-1      |
+                              |            |   (10.0.0.2)   |
+                              |            |                |
+                              |            +---> p-vm-2     |
+                              |                (10.0.0.3)   |
+                              +-----------------------------+
+                                      VPC: 10.0.0.0/29
+```
 
-### Phase 1: 基盤導入
-- WG server を VPC 内に配置
-- 公開エンドポイントを用意
-- authz_mode=observe、logging_enabled=on で準備
-- ルーティングはまだ切り替えない
+---
 
-### Phase 2: パイロット（observe）
-- 対象サーバを最小範囲で選定
-- AllowedIPs と policy をローカル設定に反映
-- authz_mode=observe を維持し、ログを収集
+## Enforcer Implementation for This Scenario
 
-### Phase 3: 観測拡大
-- 対象サーバ範囲を拡大
-- ログから policy を作成・調整
-- drop 率やレイテンシの悪化がないことを確認
+For this example, we chose an aggregated Enforcer. We prioritized a simple configuration to clearly demonstrate the phased migration flow.
 
-### Phase 4: enforce
-- 対象サーバに対して authz_mode=enforce
-- 失敗時は authz_mode=observe へ即時切替
+In production, consider sidecar deployment or splitting into multiple Enforcers based on trust boundaries and fault isolation requirements.
 
-### Phase 5: 移行完了
-- 主要サーバは WG 経由
-- 既存 VPN を撤去
+---
+
+## Phased Migration
+
+### Phase 0: Current State
+Operating with existing VPN only. WireGuard not yet deployed.
+
+### Phase 1: Infrastructure Setup
+
+Create an Enforcer VM in zt-migration-subnet (10.0.0.4). Install WireGuard/nftables and enable IP forwarding.
+
+#### 1-1. Register Enforcer in controlplane
+1. UI: Enforcers → Create Enforcer
+2. Example input:
+   - Name: `zt-enforcer`
+   - Endpoint: `<ENFORCER_PUBLIC_IP>:51820`
+   - Tunnel Subnet: `10.100.0.0/24`
+
+> **Note**: Tunnel Subnet must not overlap with VPC subnet (10.0.0.0/29). Overlap causes routing conflicts and packets won't be forwarded correctly.
+3. Save the displayed API Key
+
+#### 1-2. Start Enforcer
+```bash
+sudo CONTROLPLANE_URL="http://<CONTROLPLANE_IP>:8080" \
+     API_KEY=<api key generated above> \
+     ./enforcer
+```
+
+### Phase 2: Client Registration
+
+#### 2-1. Register Client
+```bash
+# Generate public key on client side
+sudo ./agent keygen
+# → Save the displayed public key
+```
+
+1. UI: Clients → Create Client
+2. Input:
+   - Name: `developer1`
+   - Username: `dev1`
+   - Password: `dev1`
+   - WG Public Key: `<public key generated above>`
+
+#### 2-2. Connect from Client
+```bash
+sudo ./agent up \
+  --cp-url http://<CONTROLPLANE_IP>:8080 \
+  --username dev1 \
+  --password dev1
+```
+
+### Phase 3: First Resource Migration
+
+#### 3-1. Register Resource (observe)
+1. UI: Resources → Create Resource
+2. Input:
+   - Name: `protected-resource1`
+   - CIDR: `10.0.0.2/32`
+   - Enforcer: `zt-enforcer`
+   - Mode: `observe`
+
+#### 3-2. Create Pair
+1. UI: Pairs → Create Pair
+2. Select Client: `developer1`, Resource: `protected-resource1`
+
+#### 3-3. Verify Connectivity
+```bash
+ping -c 3 10.0.0.2 # → responds
+```
+
+#### 3-4. Verify Routing
+```bash
+$ sudo ./agent status
+...
+Resources:
+  10.0.0.2/32
+    wg0 ✓ (preferred)
+    tun0: 10.0.0.0/29 (overlap)
+...
+```
+
+- `wg0 ✓ (preferred)`: Accessed via WireGuard
+- `(overlap)`: VPN has an overlapping route, but WireGuard is more specific so it takes priority
+
+> **Note**: By Zero Trust design, WireGuard CIDRs (/32 etc.) are more specific than existing VPN, so VPN taking priority is rare. If VPN is prioritized, consider adjusting route metrics.
+
+> **Note**: At this point, access to protected-vm-2 (10.0.0.3) continues via existing VPN. Resources not registered with WireGuard use the traditional route.
+
+#### 3-5. Monitor and Add Pairs
+
+![Access Logs](../sample-logs.png)
+
+Check the HasPair column in the log screen:
+- ✓: Pair exists (accessible after enforce)
+- ✗: No Pair (will be blocked after enforce)
+
+In the example above, developer2 is accessing resource1 but has no Pair (✗). If we switch to enforce now, developer2 will be blocked. If this is legitimate access, create a Pair and wait until no ✗ remains before switching to enforce.
+
+#### 3-6. Switch to enforce
+
+![Mode changing](../sample-mode-changing.png)
+
+Select `enforce` from the Mode dropdown. The change is reflected immediately and access control becomes active on the next Enforcer poll (within 30 seconds).
+
+#### 3-7. Verify Operation
+```bash
+# developer1 (has Pair): can access
+ping -c 3 10.0.0.2  # → responds
+
+# developer2 (no Pair): blocked
+ping -c 3 10.0.0.2  # → no response
+```
+
+Configuration at this point:
+```
+                              +-----------------------------+
+[Client] <--- WireGuard ----> | [Enforcer] ----> p-vm-1     |
+   ^                          | (10.0.0.4)   /  (10.0.0.2)  |
+   |                          |             /               |
+   +------ Cloud VPN -------> | [VPN GW] --+                |
+                              |             \               |
+                              |              \-> p-vm-2     |
+                              |                 (10.0.0.3)  |
+                              +-----------------------------+
+                                      VPC: 10.0.0.0/29
+```
+
+- p-vm-1: Reachable via both WireGuard (/32) and VPN (/29). /32 takes priority
+- p-vm-2: Via VPN (not yet registered with WireGuard)
+
+### Phase 4: Subsequent Resource Migration
+
+Repeat the same steps as Phase 3. Register protected-vm-2 (10.0.0.3/32) in observe mode, monitor logs, set up Pairs, then switch to enforce.
+
+Configuration at this point:
+```
+                              +-----------------------------+
+[Client] <--- WireGuard ----> | [Enforcer] -+--> p-vm-1     |
+   ^                          | (10.0.0.4)  |  (10.0.0.2)   |
+   |                          |             |               |
+   +------ Cloud VPN -------> | [VPN GW] ---+-> p-vm-2      |
+                              |                (10.0.0.3)   |
+                              +-----------------------------+
+                                      VPC: 10.0.0.0/29
+```
+
+- p-vm-1: Reachable via both WireGuard (/32) and VPN (/29). /32 takes priority
+- p-vm-2: Reachable via both WireGuard (/32) and VPN (/29). /32 takes priority
+
+```bash
+$ sudo ./agent status
+...
+Resources:
+  10.0.0.2/32
+    wg0 ✓ (preferred)
+    tun0: 10.0.0.0/29 (overlap)
+  10.0.0.3/32
+    wg0 ✓ (preferred)
+    tun0: 10.0.0.0/29 (overlap)
+...
+```
+
+### Phase 5: Migration Complete
+
+Decommission existing VPN.
+
+```
+                              +-----------------------------+
+[Client] <--- WireGuard ----> | [Enforcer] ----> p-vm-1     |
+                              | (10.0.0.4)  |  (10.0.0.2)   |
+                              |             |               |
+                              |             +-> p-vm-2      |
+                              |                (10.0.0.3)   |
+                              +-----------------------------+
+                                      VPC: 10.0.0.0/29
+```
+
+```bash
+$ sudo ./agent status
+...
+Resources:
+  10.0.0.2/32
+    wg0 ✓ (preferred)
+  10.0.0.3/32
+    wg0 ✓ (preferred)
+...
+```
+
+Overlap is gone, now accessing via WireGuard only.
+
+---
+
+## Rollback
+
+### If Issues Occur in enforce Mode
+1. UI: Change target Resource's Mode to `observe`
+2. Enforcer fetches configuration on next poll (within 30 seconds)
+3. All authenticated Clients can access immediately
+
+### If Enforcer Has Issues
+1. Stop agent on Client: `sudo ./agent down`
+2. WireGuard routes are removed, allowing access via existing VPN (if still available)
+3. After restarting Enforcer VM and running `sudo ./enforcer`, reconnect from Client once it appears to be working normally

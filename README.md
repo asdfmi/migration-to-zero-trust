@@ -1,12 +1,8 @@
 # Migration to Zero Trust
 
-This repository is a reading-focused guide to migrating from VPN-centered boundary trust to Zero Trust, with
-minimal WireGuard-based data-plane MVPs, concrete examples, and phased rollout guidance plus references.
+A reading-focused guide to migrating from VPN-centered boundary trust to Zero Trust. This repository pairs background narrative with an MVP stack: controlplane + agent as the product, a per-customer WireGuard enforcer for migration, and protected-resource apps as customer-owned examples to validate the path.
 
-## Recommended reading order
-1) Background and migration narrative: [docs/MIGRATION-TO-ZERO-TRUST.md](docs/MIGRATION-TO-ZERO-TRUST.md)
-2) Example of a phased migration for a simple environment, assuming the topology has already been made explicit: [docs/OPERATION.md](docs/OPERATION.md)
-
-## References
-- https://csrc.nist.gov/pubs/sp/800/207/final
-- https://research.google/pubs/beyondcorp-and-the-long-tail-of-zero-trust/
+## Read in this order
+1. [MIGRATION-TO-ZERO-TRUST](docs/MIGRATION-TO-ZERO-TRUST.md) - Background and philosophy: VPN limitations and the design shift to Zero Trust
+2. [DESIGN](docs/DESIGN.md) - Product design: controlplane + agent
+3. [OPERATION](docs/OPERATION.md) - Phased migration example using the product in a hypothetical customer environment

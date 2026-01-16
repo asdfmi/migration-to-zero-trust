@@ -1,0 +1,25 @@
+{{define "enforcer_created.html"}}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Enforcer Created</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; color: #111; background: #f6f7f9; }
+      .card { background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); max-width: 600px; }
+      .api-key { font-family: monospace; background: #f0f0f0; padding: 8px 12px; border-radius: 4px; word-break: break-all; display: block; margin: 12px 0; }
+      .warning { background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 4px; margin-bottom: 16px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="warning">
+        <strong>Important:</strong> Save the API Key now. It will not be shown again.
+      </div>
+      <span class="api-key">{{.Enforcer.APIKey}}</span>
+      <a href="/enforcers">&larr; Back to Enforcers</a>
+    </div>
+  </body>
+</html>
+{{end}}

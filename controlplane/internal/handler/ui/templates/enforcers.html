@@ -1,0 +1,73 @@
+{{define "enforcers.html"}}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Enforcers</title>
+    <style>
+      :root { color-scheme: light; }
+      body { font-family: Arial, sans-serif; margin: 24px; color: #111; background: #f6f7f9; }
+      header { margin-bottom: 16px; }
+      nav a { margin-right: 12px; text-decoration: none; color: #1a4b8c; padding: 4px 8px; border-radius: 4px; }
+      nav a.active { background: #1a4b8c; color: #fff; }
+      .card { background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 16px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e3e6ea; font-size: 14px; }
+      input, select, button { padding: 6px 8px; margin-right: 8px; margin-bottom: 8px; }
+      .muted { color: #666; font-size: 12px; }
+      form.inline { display: inline; }
+      label { display: inline-block; margin-right: 16px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Enforcers</h1>
+      <nav>
+        <a href="/pairs">Pairs</a>
+        <a href="/clients">Clients</a>
+        <a href="/resources">Resources</a>
+        <a href="/enforcers" class="active">Enforcers</a>
+      </nav>
+    </header>
+    <div class="card">
+      <h2>Create Enforcer</h2>
+      <form method="post" action="/enforcers">
+        <input type="text" name="name" placeholder="Name" required>
+        <input type="text" name="endpoint" placeholder="Endpoint (host:port)" required>
+        <input type="text" name="tunnel_subnet" placeholder="Tunnel Subnet (e.g. 10.0.0.0/24)" required>
+        <button type="submit">Create</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Enforcers</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Endpoint</th>
+            <th>Tunnel Subnet</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .}}
+          <tr>
+            <td><a href="/enforcers/{{.ID}}">{{.Name}}</a></td>
+            <td><span class="muted">{{.Endpoint}}</span></td>
+            <td><span class="muted">{{.TunnelSubnet}}</span></td>
+            <td>{{if .WGPublicKey}}<span style="color:green">Registered</span>{{else}}<span class="muted">Not registered</span>{{end}}</td>
+            <td>
+              <form class="inline" method="post" action="/enforcers/{{.ID}}/delete">
+                <button type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </body>
+</html>
+{{end}}

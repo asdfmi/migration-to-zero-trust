@@ -1,9 +1,8 @@
-control-plane/control-plane
-wg-server/wg-server
-wg-client/wg-client
-
+controlplane/controlplane
+enforcer/enforcer
+agent/agent
+protected-resource1
+protected-resource2
 *.db
-
 .env
-
-deploy.md
+memo.md

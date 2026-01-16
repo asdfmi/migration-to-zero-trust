@@ -1,357 +1,125 @@
-# Background of VPN
-
-In the on-premises era, a corporate network's "inside/outside" was not an idea but the management boundary itself.
-Companies owned servers, wiring, routers, and firewalls, and could identify who configured them and who touched them.
-On the other hand, the Internet side was a collection of third parties, so operational discipline and responsibility could not be shared.
-
-In that era, the "inside" was not safe; communications and identities were predictable.
-In addition, because it relied on leased lines and limited connection points, the cost of gaining reachability from outside to inside was high,
-and the mere fact of being reachable functioned as a weak form of authentication.
-
-However, with the spread of ISPs and the maturation of routing, global connectivity expanded rapidly.
-As symbolized by IPv4 exhaustion, reachability shifted from a scarce resource to a commodity,
-and the fact of "being reachable" could no longer substitute for trust.
-
-For the first time, there arose a need to artificially recreate the "inside" that had been lost on public networks.
-VPNs emerged as the technology to answer this, layering authentication and encryption on top of reachability
-and explicitly constructing what had once existed implicitly.
-
-# Weaknesses of VPN
-
-VPNs were effective at recreating the "inside" lost on public networks.
-But their design, in many cases, strongly separates "before entry" from "after entry."
-
-At the entrance, strict checks are performed using keys, certificates, and authentication,
-but once connected to the VPN, internal traffic becomes relatively free.
-This is not a technical constraint so much as the result of extending the perimeter defense model as-is.
-
-The problem with this structure is exposed the moment the boundary is breached.
-When VPN credentials are leaked or endpoints are compromised,
-attackers step into a "privileged intranet" and quickly gain reachability beyond the intended scope.
-
-What matters is not that "the VPN was broken,"
-but that the design still trusts the inside.
-
-VPNs can control reachability,
-but they do not guarantee least privilege or legitimacy of traffic after entry.
-This structural weakness becomes the starting point of the later shift to Zero Trust.
-
-# The Rise of Cloud
-
-In 2006, AWS launched S3 (March) and EC2 (August beta),
-shifting compute and storage from "ownership" to "use only what you need."
-Without buying servers, environments could be brought up in minutes, with no upfront investment.
-That flexibility and speed were embraced with strong enthusiasm in enterprise IT.
-
-Meanwhile, VPNs had been effective before that era
-as a technology to recreate the "inside" lost on public networks.
-Their design assumes strict entrance control and a perimeter model that relatively trusts the inside.
-
-This structural weakness itself existed before the cloud era.
-But at the time, assets to protect were concentrated in the corporate LAN,
-and the cost of external compromise was high, so in practice it did not become a major problem.
-
-The spread of cloud overturned this premise.
-Compute resources and data were no longer confined inside the boundary,
-and Internet reachability and credentials became the direct entry points to high-value assets.
-
-As a result, the VPN property of "breach the entrance = broad reachability inside" shifted
-from a theoretical defect to a practical attack surface.
-This was not because VPN was inferior, but a side effect of cloud inverting the cost-benefit of attack and defense.
-
-VPNs can control reachability,
-but they do not guarantee least privilege or legitimacy of traffic after entry.
-This limitation forces a rethinking of boundary trust itself
-and becomes the starting point for the later move toward Zero Trust design.
-
-# Zero Trust Reached by Google
-
-With the rise of cloud, the assumption of inside vs. outside collapsed,
-and the cost-effectiveness of the VPN-centered perimeter model rapidly deteriorated.
-One of the companies that faced this earliest and most realistically was Google.
-
-Against the backdrop of a huge distributed organization and cloud-first infrastructure,
-Google found that a design premised on a "privileged intranet" could no longer hold.
-Moreover, internal compromise became a reality,
-forcing design with the assumption that boundaries will be breached.
-
-From this experience, Google's conclusion was clear.
-Do not base trust on location or network boundaries.
-Access must always be judged based on the user and device identity,
-their state at that moment, and the resource being accessed.
-
-This is the Google-style Zero Trust design later published as BeyondCorp.
-What is important here is that Zero Trust is not a new security product,
-but a design consequence of discarding boundary trust that no longer paid off in the cloud era.
-
-Google did not replace VPNs.
-It decomposed the "trust" that VPNs had implicitly carried
-and redistributed it into authentication, authorization, encryption, and visibility.
-As a result, the "privileged intranet" became unnecessary.
-
-# Zero Trust Migration
-
-Migrating to Zero Trust is not about replacing VPNs or existing network devices
-with new products.
-Nor is "stopping VPNs" itself the goal.
-
-In traditional VPN-based operations,
-reachability, location, and network boundaries were bundled together as "trust,"
-and once inside the boundary, internal traffic was relatively permitted.
-This ambiguous trust has been fixed as an implicit assumption over years of operations.
-
-Zero Trust migration is the process of decomposing that implicit trust
-and redefining, as explicit policy, who is accessing which resource, from which device,
-and under what conditions.
-The benefit gained here is that the moment you discard the inside/outside label,
-"what you trust" becomes visible as a structure,
-and you can reassign trust at the smallest unit.
-
-The difficulty is not in technical sophistication.
-It lies in forcibly exposing the ambiguous reality that VPNs have hidden.
-But for the same reason, once you can make it explicit,
-it becomes the foundation for defense not dependent on boundaries.
-
-In the early stages of migration, the first thing to do is not control but visibility.
-By observing existing traffic without breaking it,
-the facts of who connects, from where, and how are exposed.
-
-With this visibility,
-traffic without an explainable purpose or owner,
-access from devices with unknown state,
-and traffic that has long been "allowed for now"
-are listed as non-compliant traffic.
-This listing is not just an inventory;
-it is also the work of visualizing lateral movement paths one by one
-and converting them into items that can be eliminated.
-
-Zero Trust migration is not about introducing a new mechanism,
-but about raising previously unexplained communications
-into specifications that can be explained one by one.
-And "explainable communications" can then connect directly
-to least privilege, auditing, and staged blocking.
-
-# Where It Gets Stuck
-
-Zero Trust migration gets stuck not because the technology is immature.
-It gets stuck because the boundary called VPN has hidden ambiguity for years,
-and that ambiguity must be recovered as design.
-
-In VPN-based operations, many communications have been allowed
-simply because "it is inside" or "it is used for business."
-As a result, who uses what for what purpose,
-and under what conditions it should be allowed,
-have accumulated as facts rather than design.
-
-In Zero Trust, this ambiguity cannot be pushed back to the boundary.
-Traffic that cannot be expressed in terms of actor, device, resource, and conditions
-is exposed, even before control, as "not yet given meaning."
-
-The work that occurs here is not tool adoption or policy writing.
-It is the process of observing actual traffic,
-matching it to which business process and which step it belongs to,
-and articulating "why it is necessary" one by one.
-
-What is important is that this process is not a one-time migration task.
-Business changes, systems grow and shrink,
-and new communications continue to occur.
-The accountability that VPNs had shouldered at the boundary
-must be re-assumed as design each time in Zero Trust.
-
-Therefore Zero Trust migration cannot become a project that ends.
-It becomes operations themselves, including continuous observation,
-meaning-making, and adjustment to maintain operations without boundaries.
-
-The sticking point at this stage is not a lack of technology or products,
-but that within the organization it is not defined
-who will take on this accountability and to what extent.
-
-For the first time, a role is needed to enter the field
-and move the design forward by tying real traffic to business context.
-The role of the FDE (Forward Deployed Engineer)
-is optimal for resolving this structural bottleneck.
-
----
-
 # VPN の背景
 
-オンプレ中心の時代、企業ネットワークの「内／外」は思想ではなく管理境界そのものだった。
-企業はサーバ・配線・ルータ・FWを自ら保有し、誰が設定し、誰が触れるかを把握できた。
-一方、インターネット側は第三者の集合で、運用規律も責任主体も共有できない。
+ARPANETが稼働を始めた1969年、ネットワークは限られた研究者が共有する基盤だった[1]。脅威という概念は1972年時点ですでに存在していたが[2]、それは不特定多数からの侵入を前提とするものではなかった。
 
-この時代において「内側」は安全だったのではなく、通信と主体が予測可能だった。
-加えて、専用線や限定的な接続点に依存していたため、外部から内側への到達性の獲得コストは高く、
-到達できること自体が結果的に弱い認証として機能していた。
+この前提のまま、1970〜80年代にEthernetを中心とするLANが普及し、企業ネットワークはオンプレミスで閉じた社内インフラとして成立した[1]。この時代の「内側」は、積極的に防御設計された結果というよりも、物理的・技術的に外部から到達できなかったことによって成立していた側面が大きい。
 
-しかし、ISPの普及とルーティングの成熟により、世界規模での接続性が急速に拡大する。
-IPv4枯渇が象徴するように、到達性は希少資源からコモディティへと変わり、
-「到達できる」という事実はもはや信頼の代替にならなくなった。
+しかしTCP/IPがARPANETで採用され、NCPからTCP/IPへの移行が計画・実施されたことで、ARPANETは他のネットワークと連結される「インターネットの一部」へと変質した[1][3]。ここからネットワークの境界は、物理や組織ではなく「到達性」で語られるようになる。
 
-ここで初めて、公共ネットワーク上で失われた「内側」を人工的に再現する必要が生じる。
-VPNはこの要請に応える技術として、到達性の上に認証と暗号を重ね、
-かつて暗黙に成立していた内側を明示的に構築する手段として登場した。
+1990年代、NSFNETの民営化と商用インターネットの成立によってIP到達性が商品化され[4][5][6]、企業ネットワークは「外部から触られる存在」になった。同時に1988年のワーム事件は、「つながること自体がリスクになる」現実を突きつけた[7]。
+
+この矛盾に対し、結果として広く採用された実装が、NATとプライベートアドレスである[8][9]。それらは本来アドレス枯渇や運用上の課題への対処として導入されたが、運用の中で「内側はグローバルに到達不能である」という前提を事実上固定化する役割を果たした。
+
+こうして「内と外」は実装として分離された。VPNは、この境界前提を壊さずに、公衆網上で暗号化と認証により必要な通信だけを例外として内側へ通すための技術として整理される[10]。
+
+インターネット以前は、届かないから守られていた。インターネット化によって届くようになり、内外分離が必然になった。VPNは、その境界モデルが生み出した必然的な解である。
 
 # VPN の弱点
 
-VPNは、公共ネットワーク上で失われた「内側」を再現するための有効な技術だった。
-しかしその設計は、多くの場合「入る前」と「入った後」を強く分離する。
+VPNは、境界を前提としたネットワーク設計をそのままリモート接続へ拡張した技術である[12]。そのため設計上、「入る前」と「入った後」が強く分離される。入口では厳密な認証を行う一方、一度内側に入ると通信は相対的に自由になる[12][13]。
 
-入口では、鍵・証明書・認証などにより厳密なチェックを行う一方、
-一度VPNに接続すると、内側の通信は相対的に自由になる。
-これは技術的制約というより、境界防御モデルをそのまま引き延ばした結果である。
+この構造には本質的な弱点がある。境界が破られた瞬間、攻撃者は「特権的イントラネット」に入り込み、本来想定されていなかった範囲の到達性を一気に獲得できてしまう[12][13]。
 
-この構造の問題は、境界が破られた瞬間に露呈する。
-VPN資格情報の漏洩や端末侵害が起きると、
-攻撃者は「特権的イントラネット」に足を踏み入れ、
-本来想定されていなかった範囲への到達性を一気に獲得する。
-
-重要なのは、問題の本質が
-「VPNが破られた」ことではなく、
-「内側を信頼してしまう設計が残っている」点にあることだ。
-
-VPNは到達性を制御できても、
-内側に入った後の最小権限や通信の正当性までは保証しない。
-この構造的弱点が、後にZero Trustへと設計思想が転換される出発点になる。
+ただし、オンプレミス中心の時代には、この弱点は目立たなかった。内側に入るまでのコストが高く、物理的制約や管理下端末が前提だったため、「内側を信頼する」設計が現実と大きく乖離していなかったからだ[12]。
 
 # Cloudの台頭
 
-2006年、AWSはS3（3月）とEC2（8月・ベータ）を公開し、
-計算資源と保存資源を「所有」から「必要な分だけ使う」ものへと変えた。
-サーバを買わず、数分で環境を立ち上げられ、初期投資は不要。
-この柔軟性と速度は、企業ITに強い熱狂をもって受け入れられた。
+オンプレミス時代、価値ある資産は主として同一組織・同一拠点の管理下にあるネットワークに配置され、内部に入ったとしても、直ちに重要な操作ができる設計ではなかった。「中に入ること」と「壊せること」は、明確に分離されていた。
 
-一方で、VPNはそれ以前の時代に、
-公共ネットワーク上で失われた「内側」を再現する技術として有効に機能してきた。
-その設計は、厳密な入口制御と、内側を相対的に信頼する境界モデルを前提としている。
+Cloudはこの関係を反転させた。クラウドサービスの普及により、計算資源とデータは企業の物理的社内ネットワーク境界の外側（クラウド基盤）へ配置されることが一般化し[11]、アクセスはインターネット技術（HTTPSやAPI）と論理的な制御に依存する比重が高まった[11][12]。物理的な社内ネットワークは必須条件ではなくなった[11]。到達は例外ではなく、前提になった[12]。
 
-この構造的弱点自体は、Cloud以前から存在していた。
-しかし当時は、守るべき資産が社内LANに集中し、
-外部からの侵害コストも高かったため、実務上は大きな問題にならなかった。
+その結果、内部に入ったときに「できること」が格段に増えた。Cloudでは、認証の突破がそのまま広範な操作権限の行使につながりやすく、一度許可されると、データやインフラに直接影響を与えられる範囲が大きくなった[12]。到達性そのものが単純に増えたというよりも、到達した先が、直接的に価値へ結びつく構造へと変化した[12]。
 
-Cloudの普及は、この前提を根本から崩した。
-計算資源やデータは境界内に閉じなくなり、
-インターネット到達性と資格情報が、そのまま高価値資産への入口になる。
+この変化の中で、VPNの弱点が顕在化する。VPNは今も認証を行っているが、その一回の認証が持つ意味が重くなりすぎた。オンプレ時代には「社内に入る許可」だったものが、Cloud時代には「高価値資産への通行証」になった[12]。
 
-その結果、VPNの「入口突破＝内側への広範な到達性」という性質は、
-理論上の欠陥から、現実的な攻撃面へと変わった。
-これはVPNが劣っていたからではなく、
-Cloudによって攻撃と防御の費用対効果が反転した副作用である。
-
-VPNは到達性を制御できても、
-内側に入った後の最小権限や通信の正当性までは保証しない。
-この限界が、境界信頼そのものを再考する必要性を突きつけ、
-後のZero Trust設計へと議論が進む起点になった。
+VPNの設計自体が誤っていたわけではない。Cloudの普及によって、それが成立していた前提条件が変化した[12]。それが、この後 Zero Trust が必要とされる理由である。
 
 # Google が到達した Zero Trust
 
-Cloudの普及により、境界の内外という前提が崩れ、
-VPNを中心とした境界モデルの費用対効果は急速に悪化した。
-この問題に最も早く、かつ現実的に直面した企業の一つがGoogleである。
+Cloudの普及により、境界の内外という前提が崩れ、VPNを中心とした境界モデルの費用対効果は急速に悪化した[12][13]。この問題に最も早く、かつ現実的に直面した企業の一つがGoogleである[13][14]。
 
-Googleは、巨大組織の分散化とCloud前提のインフラを背景に、
-「特権的イントラネット」を前提とする設計がもはや成立しない状況に置かれた。
-さらに、内部侵害が現実のものとなり、
-境界が破られることを前提に設計せざるを得なくなる。
+Googleは、巨大組織の分散化とCloud前提のインフラを背景に、「特権的イントラネット」を前提とする設計がもはや成立しない状況に置かれた[13][14]。さらに、内部侵害が現実のものとなり、境界が破られることを前提に設計せざるを得なくなる[12][13][14]。
 
-この経験からGoogleが到達した結論は明確だった。
-場所やネットワークの内外を信頼の根拠にしない。
-アクセスは常に、ユーザーと端末の識別、
-その時点の状態、対象となる資源に基づいて判断する。
+Googleの事例から導かれた結論は、比較的一貫した方向性を示していた。場所やネットワークの内外を信頼の根拠にしない[12][13][14]。アクセスは常に、ユーザーと端末の識別、その時点の状態、対象となる資源に基づいて判断する[12][13][14]。
 
-これが後にBeyondCorpとして公開される、
-Google流のZero Trust設計である。
-ここで重要なのは、Zero Trustが新しいセキュリティ製品ではなく、
-Cloud時代において採算が合わなくなった境界信頼を捨てる、
-設計上の帰結である点だ。
+これが後にBeyondCorpとして公開される、Google流のZero Trust設計である[13][14]。ここで重要なのは、Zero Trustが新しいセキュリティ製品ではなく、Cloud時代において採算が合わなくなった境界信頼を捨てる、設計上の帰結である点だ[12][13]。
 
-GoogleはVPNを置き換えたのではない。
-VPNが暗黙に担っていた「信頼」を分解し、
-認証・認可・暗号化・可視化へと再配置した。
-その結果として、「特権的イントラネット」は不要になった。
+GoogleはVPNを置き換えたのではない。VPNが暗黙に担っていた「信頼」を分解し、認証・認可・暗号化・可視化へと再配置した[13][14]。その結果として、「特権的イントラネット」は不要になった[13][14]。
 
 # Zero Trust 移行
 
-Zero Trustへの移行は、VPNや既存ネットワーク機器を
-新しい製品に置き換えることではない。
-また「VPNをやめる」こと自体が目的でもない。
+Zero Trustへの移行は、VPNや既存ネットワーク機器を新しい製品に置き換えることではない[12]。また「VPNをやめる」こと自体が目的でもない[12][13]。
 
-従来のVPN前提の運用では、
-到達性・場所・ネットワーク境界がまとめて「信頼」として扱われ、
-一度境界を越えれば、内側の通信は相対的に許容されてきた。
-この曖昧な信頼は、長年の運用を通じて暗黙の前提として固定化している。
+従来のVPN前提の運用では、到達性・場所・ネットワーク境界がまとめて「信頼」として扱われ、一度境界を越えれば、内側の通信は相対的に許容されてきた[12][13]。この曖昧な信頼は、長年の運用を通じて暗黙の前提として固定化している。
 
-Zero Trust移行とは、この暗黙の信頼を分解し、
-誰が、どの端末で、どの資源に、どの条件でアクセスしているのかを
-明示的なポリシーとして再定義するプロセスである。
-ここで得られるうまみは、内／外という場所のラベルを捨てた瞬間に、
-「何を信頼しているのか」が構造として露出し、
-信頼を最小単位で配置し直せる点にある。
+Zero Trust移行とは、この暗黙の信頼を分解し、誰が、どの端末で、どの資源に、どの条件でアクセスしているのかを明示的なポリシーとして再定義するプロセスである[12][13]。ここで得られるうまみは、内／外という場所のラベルを捨てた瞬間に、「何を信頼しているのか」が構造として露出し、信頼を最小単位で配置し直せる点にある[12]。
 
-この作業が難しい理由は、技術の高度さにあるのではない。
-VPNが覆い隠してきた曖昧な現実を、
-否応なく表に出してしまう点にある。
-ただし同じ理由で、いったん明示できれば、
-そのまま境界依存ではない防御の土台になる。
+この作業が難しい理由は、技術の高度さにあるのではない。VPNが覆い隠してきた曖昧な現実を、否応なく表に出してしまう点にある[13][14]。ただし同じ理由で、いったん明示できれば、そのまま境界依存ではない防御の土台になる[12]。
 
-移行の初期段階で最初に行われるのは制御ではなく可視化である。
-既存の通信を壊さずに観測することで、
-誰が、どこに、どのように接続しているのかが事実として露出する。
+移行の初期段階で最初に行われるのは制御ではなく可視化である[12][14]。既存の通信を壊さずに観測することで、誰が、どこに、どのように接続しているのかが事実として露出する[12][14]。
 
-この可視化によって、
-目的や責任者が説明できない通信、
-端末状態が不明なアクセス、
-長年「とりあえず通っていた」通信が、
-非準拠トラフィックとして列挙される。
-この列挙は単なる棚卸しではなく、
-攻撃者が横に動ける経路を一つずつ可視化し、
-潰せる形に変換する作業でもある。
+この可視化によって、目的や責任者が説明できない通信、端末状態が不明なアクセス、長年「とりあえず通っていた」通信が、非準拠トラフィックとして列挙される[14]。この列挙は単なる棚卸しではなく、攻撃者が横に動ける経路を一つずつ可視化し、潰せる形に変換する作業でもある[12][14]。
 
-Zero Trust移行とは、
-新しい仕組みを導入することではなく、
-これまで説明不要だった通信を、
-一つずつ説明可能な仕様へ引き上げていく過程である。
-そして「説明可能になった通信」は、そのまま
-最小権限・監査・段階的な遮断へ接続できる。
+Zero Trust移行とは、新しい仕組みを導入することではなく、これまで説明不要だった通信を、一つずつ説明可能な仕様へ引き上げていく過程である[12]。そして「説明可能になった通信」は、そのまま最小権限・監査・段階的な遮断へ接続できる[12]。
 
 # どこで詰まるか
 
-Zero Trust移行が詰まるのは、技術が未成熟だからではない。
-VPNという境界が、長年にわたって覆い隠してきた曖昧さを、
-設計として回収しなければならなくなる点で詰まる。
+Zero Trust移行が詰まるのは、技術が未成熟だからではない[12]。VPNという境界が、長年にわたって覆い隠してきた曖昧さを、設計として回収しなければならなくなる点で詰まる[12][13]。
 
-VPN前提の運用では、多くの通信が
-「内側だから」「業務で使っているから」という理由だけで通ってきた。
-その結果、誰が何の目的で利用しているのか、
-どの条件まで許容されるべきかが、
-設計ではなく既成事実として積み重なっている。
+VPN前提の運用では、多くの通信が「内側だから」「業務で使っているから」という理由だけで通ってきた[13]。その結果、誰が何の目的で利用しているのか、どの条件まで許容されるべきかが、設計ではなく既成事実として積み重なっている。
 
-Zero Trustでは、この曖昧さを境界に押し戻すことができない。
-主体・端末・対象資源・条件を言葉にできない通信は、
-制御以前に「意味づけが終わっていないもの」として露出する。
+Zero Trustでは、この曖昧さを境界に押し戻すことができない[12]。主体・端末・対象資源・条件を言葉にできない通信は、制御以前に「意味づけが終わっていないもの」として露出する[12][14]。
 
-ここで発生する作業は、ツール導入やポリシー記述ではない。
-実際の通信を観測し、
-それがどの業務のどの工程に紐づいているのかを突き合わせ、
-「なぜ必要なのか」を一つずつ言語化する工程である。
+ここで発生する作業は、ツール導入やポリシー記述ではない。実際の通信を観測し、それがどの業務のどの工程に紐づいているのかを突き合わせ、「なぜ必要なのか」を一つずつ言語化する工程である[14]。
 
-重要なのは、この工程が一時的な移行作業ではない点だ。
-業務は変化し、システムは増減し、
-新しい通信は継続的に発生する。
-VPNが境界で肩代わりしていた説明責任は、
-Zero Trustではその都度、設計として引き受け直す必要がある。
+重要なのは、この工程が一時的な移行作業ではない点だ[12]。業務は変化し、システムは増減し、新しい通信は継続的に発生する。VPNが境界で肩代わりしていた説明責任は、Zero Trustではその都度、設計として引き受け直す必要がある[12][13]。
 
-そのためZero Trust移行は、
-完成して終わるプロジェクトにはなり得ない。
-境界に依存せず運用を維持するための、
-継続的な観測・意味づけ・調整を含む運用そのものになる。
+Zero Trust移行は、単一の完了点を持つプロジェクトとして扱うことが難しく、継続的な運用プロセスとして位置づけられることが多い[12]。境界に依存せず運用を維持するための、継続的な観測・意味づけ・調整を含む運用そのものになる。
 
-この段階で詰まるのは、
-技術や製品の不足ではなく、
-この説明責任を誰が、どこまで、引き受けるのかが
-組織内で定義されていないことである。
+この段階で詰まるのは、技術や製品の不足ではなく、この説明責任を誰が、どこまで、引き受けるのかが組織内で定義されていないことである[13][14]。
 
-ここに初めて、
-現場に入り込み、実通信と業務文脈を結びつけながら
-設計を前に進める役割が必要になる。
-FDE（Forward Deployed Engineer）というロールは、
-この構造的な詰まりを解消するために最適である。
+ここに初めて、現場に入り込み、実通信と業務文脈を結びつけながら設計を前に進める役割が必要になる[14]。FDEというロールは、この種の構造的な詰まりに対して、現実的に機能しやすい役割の一つである。
+
+# 参考
+
+[1] A Brief History of the Internet
+https://www.internetsociety.org/internet/history-internet/brief-history-internet/
+
+[2] Computer Security Technology Planning Study (James P. Anderson, 1972) – NIST CSRC
+https://csrc.nist.gov/files/pubs/conference/1998/10/08/proceedings-of-the-21st-nissc-1998/final/docs/early-cs-papers/ande72a.pdf
+
+[3] RFC 801 – NCP/TCP Transition Plan
+https://www.rfc-editor.org/rfc/rfc801
+
+[4] The Digital Handshake: Connecting Internet Backbones (FCC OPP Working Paper No. 32)
+https://www.fcc.gov/Bureaus/OPP/working_papers/oppwp32.pdf
+
+[5] Birth of the Commercial Internet（NSF）
+https://www.nsf.gov/news/special_reports/nsf-net/
+
+[6] NSF Shapes the Internet's Evolution (NSF, 2003)
+https://www.nsf.gov/news/nsf-shapes-internets-evolution
+
+[7] Fostering Growth in Professional Cyber Incident Management – SEI (CERT history)
+https://www.sei.cmu.edu/history-of-innovation/fostering-growth-in-professional-cyber-incident-management/
+
+[8] RFC 1631 – The IP Network Address Translator (NAT)
+https://www.rfc-editor.org/rfc/rfc1631
+
+[9] RFC 1918 – Address Allocation for Private Internets
+https://www.rfc-editor.org/rfc/rfc1918
+
+[10] NIST SP 800-77 Rev.1 – Guide to IPsec VPNs
+https://csrc.nist.gov/publications/detail/sp/800-77/rev-1/final
+
+[11] NIST SP 800-145 – The NIST Definition of Cloud Computing
+https://csrc.nist.gov/pubs/sp/800/145/final
+
+[12] NIST SP 800-207 – Zero Trust Architecture
+https://nvlpubs.nist.gov/nistpubs/specialpublications/NIST.SP.800-207.pdf
+
+[13] Ward, R. / Beyer, B. – BeyondCorp: A New Approach to Enterprise Security (USENIX ;login:, 2014)
+https://www.usenix.org/system/files/login/articles/login_dec14_02_ward.pdf
+
+[14] Osborn, B. et al. – BeyondCorp: Design to Deployment at Google (USENIX ;login:, 2016)
+https://www.usenix.org/system/files/login/articles/login_spring16_06_osborn.pdf

@@ -1,53 +1,139 @@
-# MVP Data Plane Design (WireGuard)
+# Product Design (controlplane + agent)
 
-### Topology
-This implementation consists of three binaries: wg-client on the source host, wg-server as a gateway inside the target network, and protected-resource as a minimal HTTP service. Both wg-client and wg-server are configured from local YAML files. wg-client brings up a WireGuard interface and installs routes for AllowedIPs. wg-server brings up its WireGuard interface, configures peers, and optionally enables logging and L3 allowlist enforcement via nftables/NFLOG. Logging emits JSONL locally. The protected-resource is only for connectivity validation.
- 
-### wg-server ([README](../wg-server/README.md))
-- Creates or reuses a WireGuard interface, assigns address, listen port, and peers from config.
-- authz_mode:
-  - observe: always forward, optionally log.
-  - enforce: apply L3 allowlist rules (default drop) via nftables.
-- logging_enabled:
-  - Adds an nftables NFLOG rule on the forward path.
-  - Writes JSONL events locally (src/dst IP, ports, proto, client_id).
-- Policy mapping:
-  - client_id is the peer public key.
-- Config file: `wg-server/configs/config.example.yaml`
-
-### wg-client ([README](../wg-client/README.md))
-- Creates or reuses a WireGuard interface, assigns address, configures the server peer.
-- Adds OS routes for AllowedIPs.
-- Supports optional listen port and persistent keepalive.
-- Config file: `wg-client/configs/config.example.yaml`
-
-### protected-resource ([README](../protected-resource/README.md))
-- Minimal HTTP server used as a protected resource.
-- Listens on 0.0.0.0:8080; /healthz returns 200.
+## Scope
+This document covers the product components: controlplane and agent. Gateway depends on customer infrastructure and is covered in [OPERATION.md](./OPERATION.md).
 
 ---
 
-### 全体構成
-本実装は 3 つのバイナリで構成される。接続元の wg-client、ゲートウェイとして動く wg-server、疎通確認用の最小 HTTP サービス protected-resource。wg-client と wg-server はどちらもローカル YAML 設定から起動する。wg-client は WireGuard インターフェースを作成し AllowedIPs のルートを追加する。wg-server は WireGuard インターフェースと peer を設定し、必要に応じて nftables/NFLOG によるローカル JSONL ログと L3 allowlist の enforce を有効化する。protected-resource は到達性の確認用に限る。
- 
-### wg-server（[README](../wg-server/README.md)）
-- WireGuard インターフェースを作成/再利用し、アドレス、待受ポート、peer を設定。
-- authz_mode:
-  - observe: 常に forward、必要ならログのみ。
-  - enforce: L3 allowlist を nftables で適用（デフォルト drop）。
-- logging_enabled:
-  - forward 経路に nftables の NFLOG ルールを追加。
-  - JSONL でローカル出力（src/dst IP, port, proto, client_id）。
-- Policy:
-  - client_id は peer の公開鍵。
-- 設定ファイル: `wg-server/configs/config.example.yaml`
+## Concept
 
-### wg-client（[README](../wg-client/README.md)）
-- WireGuard インターフェースを作成/再利用し、アドレスと server peer を設定。
-- AllowedIPs へのルートを追加。
-- listen_port と persistent keepalive を任意で設定可。
-- 設定ファイル: `wg-client/configs/config.example.yaml`
+### observe / enforce Mode
 
-### protected-resource（[README](../protected-resource/README.md)）
-- 保護対象として使う最小 HTTP サーバ。
-- 0.0.0.0:8080 で待受、/healthz は 200。
+Resources have two modes.
+
+| Mode | Access Control | Purpose |
+|------|---------------|---------|
+| `observe` | Same as traditional VPN. All Clients can access | Early migration. Collect logs to understand usage |
+| `enforce` | Only Clients with Pair can access | After migration. Achieve Zero Trust |
+
+### Migration Flow
+1. Register Resources as `observe`, allowing all Clients to access
+2. Review logs to understand who accesses which Resource
+3. Create Pairs for required Client-Resource combinations
+4. Switch Resources to `enforce`, blocking Clients without Pairs
+5. If issues occur, immediately switch back to `observe`
+
+---
+
+## For Administrators (controlplane UI)
+
+### Initial Setup
+1. Register Gateway (name, endpoint, tunnel subnet)
+2. Register Resources (CIDR, mode, associated Gateway)
+3. Register Clients (name, username, password, WG public key)
+4. Create Pairs (Client-Resource bindings)
+
+### Client Registration Flow
+1. Have the end user run `agent keygen` on their device
+2. Receive the displayed public key
+3. Create Client in UI and enter the public key
+
+### Viewing Logs
+Traffic logs are available on the Gateway detail page. Can filter by Resource.
+
+---
+
+## For End Users (agent)
+
+### Setup
+```bash
+# 1. Generate key pair and display public key
+sudo agent keygen
+# → Share the displayed public key with your administrator
+
+# 2. After administrator registers the Client, connect
+sudo agent up --cp-url <url> --username <user> --password <pass>
+```
+
+### Commands
+| Command | Description |
+|---------|-------------|
+| `keygen` | Generate WG key pair and display public key |
+| `up` | Start connection (syncs config in background) |
+| `down` | Disconnect |
+| `status` | Show connection status and accessible CIDRs |
+
+### Behavior
+- Config syncs automatically every 15 seconds after connection
+- Resource additions/removals are reflected automatically
+- Auto re-login on session expiry
+
+---
+
+## Technical Details
+
+### Entities
+```
+Client <─ Pair ─> Resource ─> Gateway
+```
+
+| Entity | Fields |
+|--------|--------|
+| Client | ID, Name, Username, PasswordHash(bcrypt), WGPublicKey |
+| Resource | ID, Name, CIDR, Mode, GatewayID |
+| Pair | ID, ClientID, ResourceID |
+| Gateway | ID, Name, APIKeyHash, WGPublicKey, Endpoint, TunnelSubnet |
+| LogEntry | ID, GatewayID, ClientID/Name, Src/Dst, Protocol, Timestamp |
+
+### Authentication
+| Target | Method |
+|--------|--------|
+| UI | Basic Auth |
+| Client API | JWT (24h validity) |
+| Gateway API | API Key (issued at creation) |
+
+### API
+| Endpoint | Auth | Purpose |
+|----------|------|---------|
+| `POST /api/client/login` | None | Login |
+| `GET /api/client/config` | JWT | Get config |
+| `PUT /api/gateway/public-key` | API Key | Update Gateway public key |
+| `GET /api/gateway/config` | API Key | Get Gateway config |
+| `POST /api/logs` | API Key | Send logs |
+
+### Tunnel IP
+Dynamically allocated from Gateway's TunnelSubnet. `.1` is Gateway, `.2` onwards are Clients.
+
+### Constraints
+- Tunnel IP is IPv4 only
+- Tunnel IP is in-memory (reallocated on restart)
+
+### Local Files (agent)
+| File | Purpose |
+|------|---------|
+| `/var/lib/migration-to-zero-trust/{iface}.key` | WG private key |
+| `/var/lib/migration-to-zero-trust/{iface}.state.json` | Connection state |
+
+Connection state example:
+```json
+{
+  "control_plane_url": "<control-plane-url>",
+  "interface_name": "wg0",
+  "config": {
+    "client_id": "<uuid>",
+    "wg_public_key": "<client-public-key>",
+    "gateways": [
+      {
+        "gateway_id": "163acbe4-7a06-4d2e-a001-8011674e90e1",
+        "tunnel_ip": "10.100.0.2/24",
+        "gateway_public_key": "<gateway-public-key>",
+        "gateway_endpoint": "<gateway-url>",
+        "allowed_cidrs": [
+          "10.0.0.2/32"
+        ]
+      }
+    ]
+  },
+  "updated_at": "2025-01-01T00:00:00Z"
+}
+```

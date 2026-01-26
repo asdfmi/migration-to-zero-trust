@@ -6,3 +6,7 @@ A reading-focused guide to migrating from VPN-centered boundary trust to Zero Tr
 1. [MIGRATION-TO-ZERO-TRUST](docs/MIGRATION-TO-ZERO-TRUST.md) - Background and philosophy: VPN limitations and the design shift to Zero Trust
 2. [DESIGN](docs/DESIGN.md) - Product design: controlplane + agent
 3. [OPERATION](docs/OPERATION.md) - Phased migration example using the product in a hypothetical customer environment
+
+## Notes
+
+The code in this repository has been reviewed to some extent.
